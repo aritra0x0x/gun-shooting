@@ -2,6 +2,7 @@ import * as THREE from "https://unpkg.com/three@0.132.2/build/three.module.js";
 import { EnemyManager } from "./enemy.js";
 import { GameStateManager } from "./gameState.js";
 import { RadarManager } from "./radar.js";
+import { NetworkManager } from "./networkManager.js";
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -421,126 +422,138 @@ window.restartGame = function () {
   document.getElementById("health-bar").style.width = "200px";
 };
 
-// Game loop with physics
-function animate() {
-  requestAnimationFrame(animate);
+class Game {
+  constructor() {
+    this.scene = scene;
+    this.camera = camera;
+    this.renderer = renderer;
 
-  if (isPaused) {
-    return;
-  }
+    // Initialize network manager
+    this.networkManager = new NetworkManager(this.scene);
 
-  // Update grounded state
-  player.isGrounded = camera.position.y <= player.height;
-
-  // Update movement
-  updateMovement();
-
-  // Check for wall collision
-  const collisionCheck = checkCollision(camera.position);
-  player.canWallJump = collisionCheck.collision && collisionCheck.wall;
-
-  // Wall slide and jump mechanics
-  if (player.canWallJump) {
-    player.wallStickCounter = player.wallStickTime;
-    // Slow down falling when against wall
-    if (player.velocity.y < 0) {
-      player.velocity.y = -player.wallSlideSpeed;
-    }
-
-    // Wall jump
-    if (keys["Space"]) {
-      player.velocity.y = player.jumpForce;
-      // Push away from wall
-      const wallNormal = new THREE.Vector3();
-      wallNormal
-        .subVectors(camera.position, collisionCheck.wall.position)
-        .normalize();
-      camera.position.add(wallNormal.multiplyScalar(0.5));
-      player.canJump = false;
-    }
-  } else if (player.wallStickCounter > 0) {
-    player.wallStickCounter--;
-  }
-
-  // Apply gravity with wall slide
-  player.velocity.y -= player.canWallJump
-    ? player.gravity * 0.4
-    : player.gravity;
-
-  // Floor collision
-  if (camera.position.y + player.velocity.y <= player.height) {
-    camera.position.y = player.height;
-    player.velocity.y = 0;
-    player.canJump = true;
-  } else {
-    camera.position.y += player.velocity.y;
-  }
-
-  // Replace enemy update code with
-  enemyManager.update(camera.position, bullets, () => {
-    if (player.health > 0) {
-      player.health = Math.max(0, player.health - 1);
-      if (player.health === 0) {
-        gameState.gameOver();
+    // Add network update to animation loop
+    this.animate = () => {
+      if (isPaused) {
+        return;
       }
-    }
-  });
 
-  // Update health bar width
-  const healthPercent = Math.max(0, Math.min(100, player.health)) / 100;
-  const healthBarWidth = Math.max(0, Math.min(200, healthPercent * 200));
-  const healthBar = document.getElementById("health-bar");
-  healthBar.style.width = `${healthBarWidth}px`;
-  healthBar.style.background = `linear-gradient(90deg, 
-    ${healthPercent > 0.5 ? "#00ff00" : "#ff0000"}, 
-    ${healthPercent > 0.5 ? "#00cc00" : "#cc0000"})`;
+      // Update grounded state
+      player.isGrounded = camera.position.y <= player.height;
 
-  // Update bullets
-  for (let i = bullets.length - 1; i >= 0; i--) {
-    const bullet = bullets[i];
-    bullet.position.add(bullet.velocity);
+      // Update movement
+      updateMovement();
 
-    // Remove old bullets
-    if (performance.now() - bullet.timestamp > bulletLifespan) {
-      scene.remove(bullet);
-      bullets.splice(i, 1);
-      continue;
-    }
+      // Check for wall collision
+      const collisionCheck = checkCollision(camera.position);
+      player.canWallJump = collisionCheck.collision && collisionCheck.wall;
 
-    // Check bullet collisions with walls
-    const bulletBox = new THREE.Box3().setFromObject(bullet);
-    for (const wall of [...walls, ...boundaries]) {
-      const wallBox = new THREE.Box3().setFromObject(wall);
-      if (wallBox.intersectsBox(bulletBox)) {
-        scene.remove(bullet);
-        bullets.splice(i, 1);
-        break;
+      // Wall slide and jump mechanics
+      if (player.canWallJump) {
+        player.wallStickCounter = player.wallStickTime;
+        // Slow down falling when against wall
+        if (player.velocity.y < 0) {
+          player.velocity.y = -player.wallSlideSpeed;
+        }
+
+        // Wall jump
+        if (keys["Space"]) {
+          player.velocity.y = player.jumpForce;
+          // Push away from wall
+          const wallNormal = new THREE.Vector3();
+          wallNormal
+            .subVectors(camera.position, collisionCheck.wall.position)
+            .normalize();
+          camera.position.add(wallNormal.multiplyScalar(0.5));
+          player.canJump = false;
+        }
+      } else if (player.wallStickCounter > 0) {
+        player.wallStickCounter--;
       }
-    }
+
+      // Apply gravity with wall slide
+      player.velocity.y -= player.canWallJump
+        ? player.gravity * 0.4
+        : player.gravity;
+
+      // Floor collision
+      if (camera.position.y + player.velocity.y <= player.height) {
+        camera.position.y = player.height;
+        player.velocity.y = 0;
+        player.canJump = true;
+      } else {
+        camera.position.y += player.velocity.y;
+      }
+
+      // Replace enemy update code with
+      enemyManager.update(camera.position, bullets, () => {
+        if (player.health > 0) {
+          player.health = Math.max(0, player.health - 1);
+          if (player.health === 0) {
+            gameState.gameOver();
+          }
+        }
+      });
+
+      // Update health bar width
+      const healthPercent = Math.max(0, Math.min(100, player.health)) / 100;
+      const healthBarWidth = Math.max(0, Math.min(200, healthPercent * 200));
+      const healthBar = document.getElementById("health-bar");
+      healthBar.style.width = `${healthBarWidth}px`;
+      healthBar.style.background = `linear-gradient(90deg, 
+        ${healthPercent > 0.5 ? "#00ff00" : "#ff0000"}, 
+        ${healthPercent > 0.5 ? "#00cc00" : "#cc0000"})`;
+
+      // Update bullets
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        const bullet = bullets[i];
+        bullet.position.add(bullet.velocity);
+
+        // Remove old bullets
+        if (performance.now() - bullet.timestamp > bulletLifespan) {
+          scene.remove(bullet);
+          bullets.splice(i, 1);
+          continue;
+        }
+
+        // Check bullet collisions with walls
+        const bulletBox = new THREE.Box3().setFromObject(bullet);
+        for (const wall of [...walls, ...boundaries]) {
+          const wallBox = new THREE.Box3().setFromObject(wall);
+          if (wallBox.intersectsBox(bulletBox)) {
+            scene.remove(bullet);
+            bullets.splice(i, 1);
+            break;
+          }
+        }
+      }
+
+      // Update HUD
+      document.getElementById("health-text").textContent = player.health;
+      document.getElementById(
+        "ammo"
+      ).textContent = `${player.ammo}/${player.maxAmmo}`;
+
+      // Update radar before renderer.render
+      radarManager.update(enemyManager.enemies, camera.rotation.y);
+
+      // Broadcast player position to other players
+      if (this.networkManager) {
+        this.networkManager.broadcastPosition(
+          this.camera.position,
+          this.camera.rotation
+        );
+      }
+
+      this.renderer.render(this.scene, this.camera);
+      requestAnimationFrame(this.animate);
+    };
   }
 
-  // Update HUD
-  document.getElementById("health-text").textContent = player.health;
-  document.getElementById(
-    "ammo"
-  ).textContent = `${player.ammo}/${player.maxAmmo}`;
-
-  // Update radar before renderer.render
-  radarManager.update(enemyManager.enemies, camera.rotation.y);
-
-  renderer.render(scene, camera);
-}
-
-// Add restart handler
-function restartGame() {
-  const newState = gameState.restartGame();
-  player.health = newState.health;
-  player.ammo = newState.ammo;
-  player.position = new THREE.Vector3(0, player.height, 0);
-  camera.position.set(0, player.height, 0);
-
-  // Clear all enemies
-  enemyManager.clearEnemies();
+  dispose() {
+    if (this.networkManager) {
+      this.networkManager.dispose();
+    }
+  }
 }
 
 // Handle window resize
@@ -550,4 +563,5 @@ window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-animate();
+const game = new Game();
+game.animate();
