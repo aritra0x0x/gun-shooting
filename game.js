@@ -422,13 +422,6 @@ window.restartGame = function () {
   document.getElementById("health-bar").style.width = "200px";
 };
 
-// Add team selection function to window scope
-window.selectTeam = function (team) {
-  if (game.networkManager) {
-    game.networkManager.setTeam(team);
-  }
-};
-
 class Game {
   constructor() {
     this.scene = scene;
@@ -532,19 +525,6 @@ class Game {
             break;
           }
         }
-
-        // Modify bullet collision detection to check teams
-        this.networkManager.players.forEach((player, peerId) => {
-          if (player.team !== this.networkManager.team) {
-            // Only hit opposite team
-            const playerBox = new THREE.Box3().setFromObject(player.mesh);
-            if (bulletBox.intersectsBox(playerBox)) {
-              scene.remove(bullet);
-              bullets.splice(i, 1);
-              // Handle player damage here
-            }
-          }
-        });
       }
 
       // Update HUD
