@@ -44,12 +44,14 @@ export class EnemyManager {
       if (enemy.healthBar) {
         // Convert 3D position to screen coordinates
         const screenPosition = enemy.position.clone();
-        screenPosition.y += 2; // Position above enemy
+        screenPosition.y += 2.5; // Increased height above enemy
         screenPosition.project(this.camera);
 
+        // Calculate screen coordinates
         const x = (screenPosition.x * 0.5 + 0.5) * window.innerWidth;
         const y = (-screenPosition.y * 0.5 + 0.5) * window.innerHeight;
 
+        // Position health bar
         enemy.healthBar.style.left = x + "px";
         enemy.healthBar.style.top = y + "px";
 

@@ -22,15 +22,25 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 let isPaused = false;
 const radarManager = new RadarManager(
   document.getElementById("minimap"),
-  camera,
   50 // max range
 );
 
-// Add pause/resume functions
+// Update pause/resume functions
 window.resumeGame = function () {
-  isPaused = false;
-  document.getElementById("pauseMenu").classList.add("hidden");
-  document.querySelector("#gameCanvas").requestPointerLock();
+  if (!gameState.isGameOver) {
+    document.getElementById("pauseMenu").classList.add("hidden");
+    isPaused = false;
+    player.moveVelocity.set(0, 0, 0);
+    player.velocity.set(0, 0, 0);
+    // Reset all pressed keys
+    Object.keys(keys).forEach((key) => (keys[key] = false));
+    // Request pointer lock after a short delay
+    setTimeout(() => {
+      if (!isPaused && !gameState.isPaused) {
+        document.querySelector("#gameCanvas").requestPointerLock();
+      }
+    }, 10);
+  }
 };
 
 function togglePause() {
@@ -411,15 +421,40 @@ function updateMovement() {
 
 // Add before animate function
 window.restartGame = function () {
+  // Reset game state
   const newState = gameState.restartGame();
   player.health = newState.health;
   player.ammo = newState.ammo;
-  camera.position.set(0, player.height, 0);
-  player.velocity = new THREE.Vector3();
-  enemyManager.clearEnemies();
+  player.maxAmmo = 90;
 
-  // Reset health bar
+  // Reset position and movement
+  camera.position.set(0, player.height, 0);
+  player.velocity.set(0, 0, 0);
+  player.moveVelocity.set(0, 0, 0);
+  mouse.euler.set(0, 0, 0);
+  mouse.tiltAngle = 0;
+
+  // Reset weapon position
+  weapon.position.set(0.3, -0.3, -0.7);
+
+  // Clear enemies and bullets
+  enemyManager.clearEnemies();
+  bullets.forEach((bullet) => scene.remove(bullet));
+  bullets.length = 0;
+
+  // Reset UI elements
   document.getElementById("health-bar").style.width = "200px";
+  document.getElementById("health-bar").style.background =
+    "linear-gradient(90deg, #00ff00, #00cc00)";
+  document.getElementById("gameOver").classList.add("hidden");
+  document.getElementById("pauseMenu").classList.add("hidden");
+
+  // Reset game flags
+  isPaused = false;
+  gun.isRecoiling = false;
+
+  // Request pointer lock to resume gameplay
+  document.querySelector("#gameCanvas").requestPointerLock();
 };
 
 class Game {
@@ -427,16 +462,15 @@ class Game {
     this.scene = scene;
     this.camera = camera;
     this.renderer = renderer;
-
-    // Initialize network manager
     this.networkManager = new NetworkManager(this.scene);
+    this.animate = this.animate.bind(this);
+    requestAnimationFrame(this.animate);
+  }
 
-    // Add network update to animation loop
-    this.animate = () => {
-      if (isPaused) {
-        return;
-      }
+  animate() {
+    requestAnimationFrame(this.animate);
 
+    if (!isPaused && !gameState.isPaused) {
       // Update grounded state
       player.isGrounded = camera.position.y <= player.height;
 
@@ -450,15 +484,12 @@ class Game {
       // Wall slide and jump mechanics
       if (player.canWallJump) {
         player.wallStickCounter = player.wallStickTime;
-        // Slow down falling when against wall
         if (player.velocity.y < 0) {
           player.velocity.y = -player.wallSlideSpeed;
         }
 
-        // Wall jump
         if (keys["Space"]) {
           player.velocity.y = player.jumpForce;
-          // Push away from wall
           const wallNormal = new THREE.Vector3();
           wallNormal
             .subVectors(camera.position, collisionCheck.wall.position)
@@ -470,7 +501,7 @@ class Game {
         player.wallStickCounter--;
       }
 
-      // Apply gravity with wall slide
+      // Apply gravity
       player.velocity.y -= player.canWallJump
         ? player.gravity * 0.4
         : player.gravity;
@@ -484,7 +515,7 @@ class Game {
         camera.position.y += player.velocity.y;
       }
 
-      // Replace enemy update code with
+      // Update enemies
       enemyManager.update(camera.position, bullets, () => {
         if (player.health > 0) {
           player.health = Math.max(0, player.health - 1);
@@ -494,28 +525,17 @@ class Game {
         }
       });
 
-      // Update health bar width
-      const healthPercent = Math.max(0, Math.min(100, player.health)) / 100;
-      const healthBarWidth = Math.max(0, Math.min(200, healthPercent * 200));
-      const healthBar = document.getElementById("health-bar");
-      healthBar.style.width = `${healthBarWidth}px`;
-      healthBar.style.background = `linear-gradient(90deg, 
-        ${healthPercent > 0.5 ? "#00ff00" : "#ff0000"}, 
-        ${healthPercent > 0.5 ? "#00cc00" : "#cc0000"})`;
-
       // Update bullets
       for (let i = bullets.length - 1; i >= 0; i--) {
         const bullet = bullets[i];
         bullet.position.add(bullet.velocity);
 
-        // Remove old bullets
         if (performance.now() - bullet.timestamp > bulletLifespan) {
           scene.remove(bullet);
           bullets.splice(i, 1);
           continue;
         }
 
-        // Check bullet collisions with walls
         const bulletBox = new THREE.Box3().setFromObject(bullet);
         for (const wall of [...walls, ...boundaries]) {
           const wallBox = new THREE.Box3().setFromObject(wall);
@@ -528,25 +548,29 @@ class Game {
       }
 
       // Update HUD
+      const healthPercent = Math.max(0, Math.min(100, player.health)) / 100;
+      const healthBarWidth = Math.max(0, Math.min(200, healthPercent * 200));
+      const healthBar = document.getElementById("health-bar");
+      healthBar.style.width = `${healthBarWidth}px`;
+      healthBar.style.background = `linear-gradient(90deg, 
+          ${healthPercent > 0.5 ? "#00ff00" : "#ff0000"}, 
+          ${healthPercent > 0.5 ? "#00cc00" : "#cc0000"})`;
+
       document.getElementById("health-text").textContent = player.health;
       document.getElementById(
         "ammo"
       ).textContent = `${player.ammo}/${player.maxAmmo}`;
 
-      // Update radar before renderer.render
-      radarManager.update(enemyManager.enemies, camera.rotation.y);
+      // Update radar
+      radarManager.update(enemyManager.enemies, mouse.euler.y);
 
-      // Broadcast player position to other players
+      // Update network
       if (this.networkManager) {
-        this.networkManager.broadcastPosition(
-          this.camera.position,
-          this.camera.rotation
-        );
+        this.networkManager.broadcastPosition(camera.position, camera.rotation);
       }
 
       this.renderer.render(this.scene, this.camera);
-      requestAnimationFrame(this.animate);
-    };
+    }
   }
 
   dispose() {
@@ -563,5 +587,7 @@ window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// Initialize game and start animation loop
 const game = new Game();
-game.animate();
+// Add global reference
+window.gameInstance = game;
