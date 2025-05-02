@@ -3,6 +3,7 @@ import { EnemyManager } from "./enemy.js";
 import { GameStateManager } from "./gameState.js";
 import { RadarManager } from "./radar.js";
 import { NetworkManager } from "./networkManager.js";
+import { AmmoBox } from "./ammoBox.js";
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -195,6 +196,11 @@ const mouse = {
     target: new THREE.Vector3(),
   },
 };
+
+// Add after other const declarations
+const ammoBoxes = [];
+const ammoBoxSpawnInterval = 15000; // 15 seconds
+let lastAmmoBoxSpawn = 0;
 
 // Update mouse look controls
 document.addEventListener("mousemove", (e) => {
@@ -546,6 +552,40 @@ class Game {
             bullets.splice(i, 1);
             break;
           }
+        }
+      }
+
+      // Update ammo boxes
+      const currentTime = performance.now();
+      if (currentTime - lastAmmoBoxSpawn > ammoBoxSpawnInterval) {
+        // Spawn new ammo box at random position
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 15 + Math.random() * 20; // Between 15 and 35 units from center
+        const position = new THREE.Vector3(
+          Math.cos(angle) * distance,
+          0,
+          Math.sin(angle) * distance
+        );
+        ammoBoxes.push(new AmmoBox(this.scene, position));
+        lastAmmoBoxSpawn = currentTime;
+      }
+
+      // Update and check pickup for each ammo box
+      for (let i = ammoBoxes.length - 1; i >= 0; i--) {
+        const box = ammoBoxes[i];
+        box.update(currentTime / 1000);
+
+        if (box.checkPickup(camera.position)) {
+          // Add ammo to player
+          const ammoAmount = box.collect();
+          player.ammo = Math.min(player.ammo + ammoAmount, player.maxAmmo);
+
+          // Remove box
+          this.scene.remove(box.mesh);
+          ammoBoxes.splice(i, 1);
+
+          // Play pickup sound if you have one
+          // playPickupSound();
         }
       }
 
