@@ -28,18 +28,20 @@ const radarManager = new RadarManager(
 // Update pause/resume functions
 window.resumeGame = function () {
   if (!gameState.isGameOver) {
+    // Hide pause menu
     document.getElementById("pauseMenu").classList.add("hidden");
+
+    // Reset game states
     isPaused = false;
+    gameState.isPaused = false;
+
+    // Reset movement
     player.moveVelocity.set(0, 0, 0);
     player.velocity.set(0, 0, 0);
-    // Reset all pressed keys
     Object.keys(keys).forEach((key) => (keys[key] = false));
-    // Request pointer lock after a short delay
-    setTimeout(() => {
-      if (!isPaused && !gameState.isPaused) {
-        document.querySelector("#gameCanvas").requestPointerLock();
-      }
-    }, 10);
+
+    // Request pointer lock
+    document.querySelector("#gameCanvas").requestPointerLock();
   }
 };
 
