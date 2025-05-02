@@ -4,6 +4,7 @@ import { GameStateManager } from "./gameState.js";
 import { RadarManager } from "./radar.js";
 import { NetworkManager } from "./networkManager.js";
 import { AmmoBox } from "./ammoBox.js";
+import { UIManager } from "./uiManager.js";
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -25,6 +26,9 @@ const radarManager = new RadarManager(
   document.getElementById("minimap"),
   50 // max range
 );
+
+// Add UIManager initialization
+const uiManager = new UIManager();
 
 // Update pause/resume functions
 window.resumeGame = function () {
@@ -576,16 +580,17 @@ class Game {
         box.update(currentTime / 1000);
 
         if (box.checkPickup(camera.position)) {
-          // Add ammo to player
+          const oldAmmo = player.ammo;
           const ammoAmount = box.collect();
           player.ammo = Math.min(player.ammo + ammoAmount, player.maxAmmo);
+
+          // Create pickup effect and notification
+          uiManager.createPickupEffect(box.mesh.position, camera);
+          uiManager.showNotification(`+${player.ammo - oldAmmo} Ammo`);
 
           // Remove box
           this.scene.remove(box.mesh);
           ammoBoxes.splice(i, 1);
-
-          // Play pickup sound if you have one
-          // playPickupSound();
         }
       }
 
